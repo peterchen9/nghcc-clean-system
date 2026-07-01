@@ -193,6 +193,28 @@
               <p class="muted">可選全部或單一人員。結算會依開始日到結束日期間內的計薪時數計算，完成後該區間工時會標記為已結算。</p>
             </div>
             <div id="payrollSummary" class="table-list"></div>
+            <div class="panel">
+              <h3>個人工時明細</h3>
+              <form id="timeFilterForm" class="grid-form">
+                <select id="timeFilterStaff"></select>
+                <input id="timeFilterDate" type="date">
+                <button class="primary" type="submit">查看明細</button>
+              </form>
+            </div>
+            <div class="panel">
+              <h3 id="timeRecordFormTitle">新增工時</h3>
+              <form id="timeRecordForm" class="grid-form">
+                <select id="timeRecordStaff" required></select>
+                <input id="timeRecordDate" required type="date">
+                <input id="timeRecordStart" required type="time">
+                <input id="timeRecordEnd" required type="time">
+                <input id="timeRecordHours" type="number" min="0" step="0.01" placeholder="計薪小時，可留空自動計算">
+                <button id="timeRecordSubmitBtn" class="primary" type="submit">新增</button>
+                <button id="timeRecordCancelEditBtn" class="ghost hidden" type="button">取消修改</button>
+              </form>
+              <p class="muted">留空計薪小時時，會依目前規則自動計算：20 分鐘內照實際分鐘，超過 20 分鐘進位到半小時。</p>
+            </div>
+            <div id="timeRecordList" class="table-list"></div>
             <div id="settlementList" class="table-list"></div>
           </div>
         </section>

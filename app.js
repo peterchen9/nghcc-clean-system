@@ -116,6 +116,7 @@ let session = { role: null, staffId: null };
 let editingStaffId = null;
 let editingAreaId = null;
 let editingAssignmentId = null;
+let editingTimeRecordId = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -157,6 +158,21 @@ function formatDateTime(value) {
     hour: "2-digit",
     minute: "2-digit"
   }).format(new Date(value));
+}
+
+function localDateISO(value) {
+  const date = new Date(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function localTimeHHMM(value) {
+  const date = new Date(value);
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
 }
 
 function hoursBetween(start, end) {
@@ -409,6 +425,15 @@ function bindAdmin() {
     event.preventDefault();
     settlePayroll($("settleStart").value, $("settleEnd").value, $("settlementStaff").value);
   });
+  $("timeFilterForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    renderPayrollAdmin();
+  });
+  $("timeRecordForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveTimeRecordFromForm();
+  });
+  $("timeRecordCancelEditBtn").addEventListener("click", resetTimeRecordForm);
 }
 
 function syncPresetSchedule(options = {}) {
@@ -516,6 +541,98 @@ function settlePayroll(startDate, endDate, staffId = "all") {
   renderAll();
 }
 
+function saveTimeRecordFromForm() {
+  const staffId = $("timeRecordStaff").value;
+  const date = $("timeRecordDate").value;
+  const startTime = $("timeRecordStart").value;
+  const endTime = $("timeRecordEnd").value;
+  const clockIn = new Date(`${date}T${startTime}:00`);
+  const clockOut = new Date(`${date}T${endTime}:00`);
+  if (clockOut <= clockIn) {
+    alert("結束時間必須晚於開始時間");
+    return;
+  }
+  const actualMinutes = minutesBetween(clockIn, clockOut);
+  const manualHours = $("timeRecordHours").value;
+  const hours = manualHours === "" ? billableHoursFromMinutes(actualMinutes) : Number(manualHours);
+  if (Number.isNaN(hours) || hours < 0) {
+    alert("計薪小時格式不正確");
+    return;
+  }
+
+  if (editingTimeRecordId) {
+    const record = byId(state.timeRecords, editingTimeRecordId);
+    if (record) {
+      const previousSettlementId = record.settlementId;
+      record.staffId = staffId;
+      record.clockIn = clockIn.toISOString();
+      record.clockOut = clockOut.toISOString();
+      record.actualMinutes = actualMinutes;
+      record.hours = hours;
+      record.updatedAt = new Date().toISOString();
+      if (previousSettlementId) rebuildSettlementTotals(previousSettlementId);
+    }
+    resetTimeRecordForm();
+  } else {
+    state.timeRecords.push({
+      id: uid("t"),
+      staffId,
+      clockIn: clockIn.toISOString(),
+      clockOut: clockOut.toISOString(),
+      actualMinutes,
+      hours,
+      settled: false,
+      manual: true,
+      createdAt: new Date().toISOString()
+    });
+    $("timeRecordForm").reset();
+    $("timeRecordDate").value = todayISO();
+  }
+  saveState();
+  renderAll();
+}
+
+function rebuildSettlementTotals(settlementId) {
+  const settlement = state.settlements.find((item) => item.id === settlementId);
+  if (!settlement) return;
+  const totals = {};
+  state.timeRecords
+    .filter((record) => record.settlementId === settlementId && record.settled)
+    .forEach((record) => {
+      const staff = byId(state.staff, record.staffId);
+      if (!staff) return;
+      totals[record.staffId] ||= { staffId: record.staffId, hours: 0, amount: 0 };
+      totals[record.staffId].hours += record.hours;
+      totals[record.staffId].amount += record.hours * staff.hourlyRate;
+    });
+  settlement.items = Object.values(totals);
+  settlement.updatedAt = new Date().toISOString();
+}
+
+function editTimeRecord(id) {
+  const record = byId(state.timeRecords, id);
+  if (!record) return;
+  editingTimeRecordId = id;
+  $("timeRecordStaff").value = record.staffId;
+  $("timeRecordDate").value = localDateISO(record.clockIn);
+  $("timeRecordStart").value = localTimeHHMM(record.clockIn);
+  $("timeRecordEnd").value = localTimeHHMM(record.clockOut);
+  $("timeRecordHours").value = Number(record.hours || 0).toFixed(2);
+  $("timeRecordFormTitle").textContent = "修改工時";
+  $("timeRecordSubmitBtn").textContent = "儲存修改";
+  $("timeRecordCancelEditBtn").classList.remove("hidden");
+  $("timeRecordHours").focus();
+}
+
+function resetTimeRecordForm() {
+  editingTimeRecordId = null;
+  $("timeRecordForm").reset();
+  $("timeRecordDate").value = todayISO();
+  $("timeRecordFormTitle").textContent = "新增工時";
+  $("timeRecordSubmitBtn").textContent = "新增";
+  $("timeRecordCancelEditBtn").classList.add("hidden");
+}
+
 function renderAll() {
   renderLogin();
   renderSharedOptions();
@@ -551,10 +668,14 @@ function renderSharedOptions() {
   $("assignmentWeekday").innerHTML = weekdayOptions;
   $("weekdayFilter").innerHTML = `<option value="全部">全部星期</option>${weekdayOptions}`;
   $("settlementStaff").innerHTML = `<option value="all">全部人員</option>${staffOptions}`;
+  $("timeFilterStaff").innerHTML = `<option value="all">全部人員</option>${staffOptions}`;
+  $("timeRecordStaff").innerHTML = staffOptions;
 
   const today = todayISO();
   if (!$("settleStart").value) $("settleStart").value = today;
   if (!$("settleEnd").value) $("settleEnd").value = today;
+  if (!$("timeFilterDate").value) $("timeFilterDate").value = today;
+  if (!$("timeRecordDate").value) $("timeRecordDate").value = today;
 }
 
 function renderStaffView() {
@@ -762,6 +883,7 @@ function renderPayrollAdmin() {
     return row(staff.name, `未結算 ${hours.toFixed(2)} 小時 / ${money(hours * staff.hourlyRate)}`, []);
   });
   clearAndAppend($("payrollSummary"), unsettledByStaff);
+  renderTimeRecordAdmin();
 
   const settlements = state.settlements.map((settlement) => {
     const detail = settlement.items
@@ -774,6 +896,29 @@ function renderPayrollAdmin() {
     return row(`${settlement.startDate} 至 ${settlement.endDate} / ${target}`, detail, []);
   });
   clearAndAppend($("settlementList"), settlements);
+}
+
+function renderTimeRecordAdmin() {
+  const filterStaff = $("timeFilterStaff").value || "all";
+  const filterDate = $("timeFilterDate").value;
+  const records = state.timeRecords
+    .filter((record) => filterStaff === "all" || record.staffId === filterStaff)
+    .filter((record) => !filterDate || localDateISO(record.clockIn) === filterDate)
+    .sort((a, b) => new Date(b.clockIn) - new Date(a.clockIn));
+
+  const nodes = records.map((record) => {
+    const staff = byId(state.staff, record.staffId);
+    const status = record.settled ? "已結算" : "未結算";
+    const date = localDateISO(record.clockIn);
+    const timeRange = `${localTimeHHMM(record.clockIn)}-${localTimeHHMM(record.clockOut)}`;
+    const actualMinutes = record.actualMinutes ?? Math.round((record.hours || 0) * 60);
+    return row(
+      `${date} / ${staff?.name || "已刪除人員"} / ${status}`,
+      `${timeRange} / 實際 ${actualMinutes} 分鐘 / 計薪 ${Number(record.hours || 0).toFixed(2)} 小時`,
+      [button("修改", () => editTimeRecord(record.id))]
+    );
+  });
+  clearAndAppend($("timeRecordList"), nodes);
 }
 
 function row(title, subtitle, actions) {
