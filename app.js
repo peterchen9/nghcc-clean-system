@@ -110,7 +110,6 @@ const seedData = {
 
 let state = loadState();
 let session = { role: null, staffId: null };
-let loginMode = "staff";
 
 const $ = (id) => document.getElementById(id);
 
@@ -188,20 +187,8 @@ function init() {
 }
 
 function bindLogin() {
-  $("staffModeBtn").addEventListener("click", () => setLoginMode("staff"));
-  $("adminModeBtn").addEventListener("click", () => setLoginMode("admin"));
   $("loginForm").addEventListener("submit", (event) => {
     event.preventDefault();
-    if (loginMode === "admin") {
-      if ($("adminPassword").value !== ADMIN_PASSWORD) {
-        alert("後台密碼錯誤");
-        return;
-      }
-      session = { role: "admin", staffId: null };
-      showView("admin");
-      renderAll();
-      return;
-    }
     const staffId = $("loginStaff").value;
     if (!staffId) {
       alert("請先建立工作人員");
@@ -211,26 +198,43 @@ function bindLogin() {
     showView("staff");
     renderAll();
   });
+  $("adminLoginForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    if ($("adminPassword").value !== ADMIN_PASSWORD) {
+      alert("後台密碼錯誤");
+      return;
+    }
+    session = { role: "admin", staffId: null };
+    showView("admin");
+    renderAll();
+  });
+  $("adminAccessBtn").addEventListener("click", () => {
+    session = { role: null, staffId: null };
+    showView("adminLogin");
+    renderAll();
+  });
+  $("staffAccessBtn").addEventListener("click", () => {
+    session = { role: null, staffId: null };
+    $("adminPassword").value = "";
+    showView("login");
+    renderAll();
+  });
   $("logoutBtn").addEventListener("click", () => {
     session = { role: null, staffId: null };
+    $("adminPassword").value = "";
     showView("login");
     renderAll();
   });
 }
 
-function setLoginMode(mode) {
-  loginMode = mode;
-  $("staffModeBtn").classList.toggle("active", mode === "staff");
-  $("adminModeBtn").classList.toggle("active", mode === "admin");
-  $("staffLoginField").classList.toggle("hidden", mode !== "staff");
-  $("adminLoginField").classList.toggle("hidden", mode !== "admin");
-}
-
 function showView(view) {
   $("loginView").classList.toggle("hidden", view !== "login");
+  $("adminLoginView").classList.toggle("hidden", view !== "adminLogin");
   $("staffView").classList.toggle("hidden", view !== "staff");
   $("adminView").classList.toggle("hidden", view !== "admin");
-  $("logoutBtn").classList.toggle("hidden", view === "login");
+  $("adminAccessBtn").classList.toggle("hidden", view === "admin" || view === "adminLogin");
+  $("staffAccessBtn").classList.toggle("hidden", view !== "admin" && view !== "adminLogin");
+  $("logoutBtn").classList.toggle("hidden", view === "login" || view === "adminLogin");
 }
 
 function bindStaff() {

@@ -55,6 +55,12 @@ button {
   padding: 16px 0 22px;
 }
 
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 h1,
 h2,
 h3,
@@ -152,6 +158,7 @@ select:focus {
 
 .primary,
 .ghost,
+.icon-btn,
 .segmented button,
 .tabs button {
   min-height: 44px;
@@ -174,6 +181,18 @@ select:focus {
   background: transparent;
   border-color: var(--line);
   color: var(--ink);
+}
+
+.icon-btn {
+  width: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  border-radius: 999px;
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  padding: 0;
+  box-shadow: 0 4px 14px rgba(20, 40, 30, 0.08);
 }
 
 .wide {
