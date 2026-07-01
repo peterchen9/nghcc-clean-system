@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>清潔工作系統</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Mobile Work System</p>
+          <h1>清潔工作系統</h1>
+        </div>
+        <button id="logoutBtn" class="ghost hidden" type="button">登出</button>
+      </header>
+
+      <main>
+        <section id="loginView" class="login-layout">
+          <div class="panel login-panel">
+            <h2>登入</h2>
+            <div class="segmented" role="tablist" aria-label="登入角色">
+              <button id="staffModeBtn" class="active" type="button">工作人員</button>
+              <button id="adminModeBtn" type="button">後台</button>
+            </div>
+
+            <form id="loginForm" class="form-stack">
+              <label id="staffLoginField">
+                <span>選擇人員</span>
+                <select id="loginStaff"></select>
+              </label>
+              <label id="adminLoginField" class="hidden">
+                <span>後台密碼</span>
+                <input id="adminPassword" type="password" autocomplete="current-password" placeholder="預設：admin123">
+              </label>
+              <button class="primary" type="submit">進入系統</button>
+            </form>
+          </div>
+
+          <div class="panel compact">
+            <h2>今日重點</h2>
+            <div id="loginSummary" class="summary-grid"></div>
+          </div>
+        </section>
+
+        <section id="staffView" class="hidden">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">工作人員</p>
+              <h2 id="staffTitle"></h2>
+            </div>
+            <span id="staffStatus" class="status-pill"></span>
+          </div>
+
+          <div class="metric-grid">
+            <div class="metric">
+              <span>未結算工時</span>
+              <strong id="unsettledHours">0</strong>
+            </div>
+            <div class="metric">
+              <span>預估工資</span>
+              <strong id="estimatedPay">$0</strong>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <h3>打卡</h3>
+              <span id="clockHint"></span>
+            </div>
+            <button id="clockBtn" class="primary wide" type="button">上班打卡</button>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <h3>我的打掃區域</h3>
+              <select id="weekdayFilter"></select>
+            </div>
+            <div id="staffAssignments" class="work-list"></div>
+          </div>
+
+          <div class="panel">
+            <h3>未結算紀錄</h3>
+            <div id="staffTimeRecords" class="record-list"></div>
+          </div>
+        </section>
+
+        <section id="adminView" class="hidden">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">後台管理</p>
+              <h2>人員、區域、檢查與薪資</h2>
+            </div>
+          </div>
+
+          <nav class="tabs" aria-label="後台功能">
+            <button class="active" data-tab="staffTab" type="button">人員</button>
+            <button data-tab="areaTab" type="button">區域</button>
+            <button data-tab="scheduleTab" type="button">內容</button>
+            <button data-tab="inspectTab" type="button">檢查</button>
+            <button data-tab="payrollTab" type="button">薪資</button>
+          </nav>
+
+          <div id="staffTab" class="admin-tab">
+            <div class="panel">
+              <h3>新增工作人員</h3>
+              <form id="staffForm" class="grid-form">
+                <input id="staffName" required placeholder="姓名">
+                <input id="staffPhone" placeholder="手機">
+                <input id="staffRate" required type="number" min="0" step="1" placeholder="時薪">
+                <button class="primary" type="submit">新增</button>
+              </form>
+            </div>
+            <div id="staffAdminList" class="table-list"></div>
+          </div>
+
+          <div id="areaTab" class="admin-tab hidden">
+            <div class="panel">
+              <h3>新增工作區域</h3>
+              <form id="areaForm" class="grid-form">
+                <input id="areaName" required placeholder="區域名稱">
+                <input id="areaLocation" placeholder="位置說明">
+                <button class="primary" type="submit">新增</button>
+              </form>
+            </div>
+            <div id="areaAdminList" class="table-list"></div>
+          </div>
+
+          <div id="scheduleTab" class="admin-tab hidden">
+            <div class="panel">
+              <h3>安排打掃內容</h3>
+              <form id="assignmentForm" class="grid-form">
+                <select id="assignmentStaff" required></select>
+                <select id="assignmentArea" required></select>
+                <select id="assignmentWeekday" required></select>
+                <input id="assignmentTasks" required placeholder="打掃內容，例如：地板、廁所、垃圾">
+                <button class="primary" type="submit">新增</button>
+              </form>
+            </div>
+            <div id="assignmentAdminList" class="table-list"></div>
+          </div>
+
+          <div id="inspectTab" class="admin-tab hidden">
+            <div class="panel">
+              <h3>清潔檢查</h3>
+              <form id="inspectionForm" class="grid-form">
+                <select id="inspectionStaff" required></select>
+                <select id="inspectionArea" required></select>
+                <select id="inspectionScore" required>
+                  <option value="5">5 分</option>
+                  <option value="4">4 分</option>
+                  <option value="3">3 分</option>
+                  <option value="2">2 分</option>
+                  <option value="1">1 分</option>
+                </select>
+                <input id="inspectionNote" placeholder="檢查備註">
+                <button class="primary" type="submit">送出</button>
+              </form>
+            </div>
+            <div id="inspectionList" class="table-list"></div>
+          </div>
+
+          <div id="payrollTab" class="admin-tab hidden">
+            <div class="panel">
+              <h3>薪資結算</h3>
+              <form id="settlementForm" class="grid-form">
+                <input id="settleStart" required type="date">
+                <input id="settleEnd" required type="date">
+                <button class="primary" type="submit">依日期結算</button>
+              </form>
+              <p class="muted">結算後，所選日期內的工時會標記為已結算，個人未結算工時會歸零或扣除已結算部分。</p>
+            </div>
+            <div id="payrollSummary" class="table-list"></div>
+            <div id="settlementList" class="table-list"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <template id="emptyStateTemplate">
+      <div class="empty-state">目前沒有資料</div>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
