@@ -1,6 +1,93 @@
 const STORAGE_KEY = "cleaning-work-system-v1";
 const ADMIN_PASSWORD = "admin123";
 const weekdays = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"];
+const presetSchedule = [
+  {
+    staffName: "楊惠如",
+    days: {
+      星期一: [
+        "1F 室外(前後)走廊",
+        "1F 室內公共區(大靜電拖)",
+        "1F 男+女+多功能廁所(清洗廁所需補備品)",
+        "B1 收餐具",
+        "1F 101",
+        "全戶垃圾(收拾+分類)(分類需整理B1回收室)",
+        "1F 室內公共區(大靜電拖)"
+      ],
+      星期四: [
+        "2F 兒主廁所/內走廊/洗手台(清洗廁所需補備品)",
+        "全戶垃圾(收拾+分類)(分類需整理B1回收室)",
+        "1F 室內公共區(大靜電拖)"
+      ],
+      星期五: [
+        "2F 男+女廁所(清洗廁所需補備品)",
+        "2F 廚房(洗地板)",
+        "1F 室內公共區(大靜電拖)"
+      ],
+      星期日: [
+        "B1 餐具清洗/水槽/瀝水網",
+        "B1 餐廳/B00/B01(桌面/地板)",
+        "收垃圾(B1+1F)",
+        "巡查1F廁所(不洗)",
+        "1F 室內公共區(大靜電拖)"
+      ]
+    }
+  },
+  {
+    staffName: "郭志華",
+    days: {
+      星期一: [
+        "4F 大堂/外走廊",
+        "4F 400/401/402/403",
+        "1F 室內公共區(大靜電拖)"
+      ],
+      星期二: [
+        "4F 男+女廁(清洗廁所需補備品)",
+        "甲/乙梯(小靜電拖)",
+        "巡視蜘蛛網(每週不同區域)",
+        "1F 室內公共區(大靜電拖)"
+      ]
+    }
+  },
+  {
+    staffName: "翁倩華",
+    days: {
+      星期二: [
+        "3F 大堂/長青室/304/外走廊",
+        "另清洗長青室廁所(清洗廁所需補備品)",
+        "3F 301/302/303/外走廊"
+      ],
+      星期三: [
+        "3F 乙梯 男+女+多功能廁所(清洗廁所需補備品)",
+        "2F 辦公室/影印室/外走廊",
+        "2F 廚房(台面/餐具/電器)"
+      ],
+      星期五: [
+        "5F 501/兩側走廊",
+        "5F 502/503/504/505",
+        "6F 禱告室"
+      ],
+      星期六: [
+        "1F 室外(前後)走廊",
+        "1F 室內公共區(大靜電拖)",
+        "前後花圃整理",
+        "大停車場垃圾",
+        "籃球場垃圾",
+        "4F->3F->2F 走廊",
+        "甲/乙梯(小靜電拖)",
+        "全戶垃圾(收拾+分類)(分類需整理B1回收室)",
+        "1F 室內公共區(大靜電拖)"
+      ],
+      星期日: [
+        "1F 室外(前後)走廊",
+        "1F 室內公共區(大靜電拖)",
+        "4F->3F->2F 走廊",
+        "巡查全戶廁所(不洗)",
+        "B1 收拾愛宴餐具"
+      ]
+    }
+  }
+];
 
 const seedData = {
   staff: [
@@ -227,6 +314,8 @@ function bindAdmin() {
     renderAll();
   });
 
+  $("importPresetScheduleBtn").addEventListener("click", importPresetSchedule);
+
   $("inspectionForm").addEventListener("submit", (event) => {
     event.preventDefault();
     state.inspections.unshift({
@@ -246,6 +335,60 @@ function bindAdmin() {
     event.preventDefault();
     settlePayroll($("settleStart").value, $("settleEnd").value);
   });
+}
+
+function importPresetSchedule() {
+  let createdAreas = 0;
+  let createdAssignments = 0;
+  let skippedAssignments = 0;
+  const missingStaff = [];
+
+  presetSchedule.forEach((personSchedule) => {
+    const staff = state.staff.find((item) => item.name.trim() === personSchedule.staffName);
+    if (!staff) {
+      missingStaff.push(personSchedule.staffName);
+      return;
+    }
+
+    Object.entries(personSchedule.days).forEach(([weekday, areaNames]) => {
+      areaNames.forEach((areaName) => {
+        const area = findOrCreateArea(areaName);
+        if (area.created) createdAreas += 1;
+
+        const exists = state.assignments.some((assignment) => {
+          return assignment.staffId === staff.id && assignment.areaId === area.id && assignment.weekday === weekday;
+        });
+        if (exists) {
+          skippedAssignments += 1;
+          return;
+        }
+
+        state.assignments.push({
+          id: uid("as"),
+          staffId: staff.id,
+          areaId: area.id,
+          weekday,
+          tasks: areaName,
+          source: "preset-1782896963195"
+        });
+        createdAssignments += 1;
+      });
+    });
+  });
+
+  saveState();
+  renderAll();
+  const missingText = missingStaff.length ? `未找到人員：${missingStaff.join("、")}。` : "所有圖片人員都已找到。";
+  $("importScheduleResult").textContent =
+    `已新增 ${createdAreas} 個區域、${createdAssignments} 筆工作內容，略過 ${skippedAssignments} 筆既有內容。${missingText}`;
+}
+
+function findOrCreateArea(name) {
+  const existing = state.areas.find((area) => area.name === name);
+  if (existing) return { ...existing, created: false };
+  const area = { id: uid("a"), name, location: "圖片班表匯入" };
+  state.areas.push(area);
+  return { ...area, created: true };
 }
 
 function settlePayroll(startDate, endDate) {

@@ -129,6 +129,16 @@
 
           <div id="scheduleTab" class="admin-tab hidden">
             <div class="panel">
+              <div class="panel-head">
+                <div>
+                  <h3>自動加入圖片班表</h3>
+                  <p class="muted">依現有人員姓名加入工作內容，不會新增、修改或刪除人員名單。</p>
+                </div>
+                <button id="importPresetScheduleBtn" class="primary" type="button">匯入班表</button>
+              </div>
+              <div id="importScheduleResult" class="muted"></div>
+            </div>
+            <div class="panel">
               <h3>安排打掃內容</h3>
               <form id="assignmentForm" class="grid-form">
                 <select id="assignmentStaff" required></select>
