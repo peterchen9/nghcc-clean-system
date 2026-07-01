@@ -1,0 +1,9 @@
+name: nghcc-clean-system
+
+services:
+  clean-system:
+    build: .
+    container_name: nghcc-clean-system
+    ports:
+      - "8081:80"
+    restart: unless-stopped
