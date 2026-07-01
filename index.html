@@ -111,12 +111,13 @@
 
           <div id="staffTab" class="admin-tab">
             <div class="panel">
-              <h3>新增工作人員</h3>
+              <h3 id="staffFormTitle">新增工作人員</h3>
               <form id="staffForm" class="grid-form">
                 <input id="staffName" required placeholder="姓名">
                 <input id="staffPhone" placeholder="手機">
                 <input id="staffRate" required type="number" min="0" step="1" placeholder="時薪">
-                <button class="primary" type="submit">新增</button>
+                <button id="staffSubmitBtn" class="primary" type="submit">新增</button>
+                <button id="staffCancelEditBtn" class="ghost hidden" type="button">取消修改</button>
               </form>
             </div>
             <div id="staffAdminList" class="table-list"></div>
@@ -124,11 +125,12 @@
 
           <div id="areaTab" class="admin-tab hidden">
             <div class="panel">
-              <h3>新增工作區域</h3>
+              <h3 id="areaFormTitle">新增工作區域</h3>
               <form id="areaForm" class="grid-form">
                 <input id="areaName" required placeholder="區域名稱">
                 <input id="areaLocation" placeholder="位置說明">
-                <button class="primary" type="submit">新增</button>
+                <button id="areaSubmitBtn" class="primary" type="submit">新增</button>
+                <button id="areaCancelEditBtn" class="ghost hidden" type="button">取消修改</button>
               </form>
             </div>
             <div id="areaAdminList" class="table-list"></div>
@@ -146,13 +148,14 @@
               <div id="importScheduleResult" class="muted"></div>
             </div>
             <div class="panel">
-              <h3>安排打掃內容</h3>
+              <h3 id="assignmentFormTitle">安排打掃內容</h3>
               <form id="assignmentForm" class="grid-form">
                 <select id="assignmentStaff" required></select>
                 <select id="assignmentArea" required></select>
                 <select id="assignmentWeekday" required></select>
                 <input id="assignmentTasks" required placeholder="打掃內容，例如：地板、廁所、垃圾">
-                <button class="primary" type="submit">新增</button>
+                <button id="assignmentSubmitBtn" class="primary" type="submit">新增</button>
+                <button id="assignmentCancelEditBtn" class="ghost hidden" type="button">取消修改</button>
               </form>
             </div>
             <div id="assignmentAdminList" class="table-list"></div>

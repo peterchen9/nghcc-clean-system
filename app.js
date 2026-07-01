@@ -107,11 +107,15 @@ const seedData = {
   settlements: [],
   activeClocks: {},
   lastClockActions: {},
-  taskCompletions: {}
+  taskCompletions: {},
+  presetScheduleSynced: false
 };
 
 let state = loadState();
 let session = { role: null, staffId: null };
+let editingStaffId = null;
+let editingAreaId = null;
+let editingAssignmentId = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -123,6 +127,7 @@ function loadState() {
     if (!parsed.activeClocks) parsed.activeClocks = {};
     if (!parsed.lastClockActions) parsed.lastClockActions = {};
     if (!parsed.taskCompletions) parsed.taskCompletions = {};
+    if (typeof parsed.presetScheduleSynced !== "boolean") parsed.presetScheduleSynced = false;
     if (parsed.activeClock?.staffId) {
       parsed.activeClocks[parsed.activeClock.staffId] = parsed.activeClock;
       delete parsed.activeClock;
@@ -196,7 +201,9 @@ function init() {
   bindLogin();
   bindStaff();
   bindAdmin();
-  syncPresetSchedule();
+  if (!state.presetScheduleSynced) {
+    syncPresetSchedule({ markSynced: true });
+  }
   renderAll();
 }
 
@@ -309,45 +316,79 @@ function bindAdmin() {
 
   $("staffForm").addEventListener("submit", (event) => {
     event.preventDefault();
-    state.staff.push({
-      id: uid("s"),
-      name: $("staffName").value.trim(),
-      phone: $("staffPhone").value.trim(),
-      hourlyRate: Number($("staffRate").value),
-      active: true
-    });
-    event.target.reset();
+    if (editingStaffId) {
+      const staff = byId(state.staff, editingStaffId);
+      if (staff) {
+        staff.name = $("staffName").value.trim();
+        staff.phone = $("staffPhone").value.trim();
+        staff.hourlyRate = Number($("staffRate").value);
+      }
+      resetStaffForm();
+    } else {
+      state.staff.push({
+        id: uid("s"),
+        name: $("staffName").value.trim(),
+        phone: $("staffPhone").value.trim(),
+        hourlyRate: Number($("staffRate").value),
+        active: true
+      });
+      event.target.reset();
+    }
     saveState();
     renderAll();
   });
+  $("staffCancelEditBtn").addEventListener("click", resetStaffForm);
 
   $("areaForm").addEventListener("submit", (event) => {
     event.preventDefault();
-    state.areas.push({
-      id: uid("a"),
-      name: $("areaName").value.trim(),
-      location: $("areaLocation").value.trim()
-    });
-    event.target.reset();
+    if (editingAreaId) {
+      const area = byId(state.areas, editingAreaId);
+      if (area) {
+        area.name = $("areaName").value.trim();
+        area.location = $("areaLocation").value.trim();
+      }
+      resetAreaForm();
+    } else {
+      state.areas.push({
+        id: uid("a"),
+        name: $("areaName").value.trim(),
+        location: $("areaLocation").value.trim()
+      });
+      event.target.reset();
+    }
     saveState();
     renderAll();
   });
+  $("areaCancelEditBtn").addEventListener("click", resetAreaForm);
 
   $("assignmentForm").addEventListener("submit", (event) => {
     event.preventDefault();
-    state.assignments.push({
-      id: uid("as"),
-      staffId: $("assignmentStaff").value,
-      areaId: $("assignmentArea").value,
-      weekday: $("assignmentWeekday").value,
-      tasks: $("assignmentTasks").value.trim()
-    });
-    event.target.reset();
+    if (editingAssignmentId) {
+      const assignment = byId(state.assignments, editingAssignmentId);
+      if (assignment) {
+        assignment.staffId = $("assignmentStaff").value;
+        assignment.areaId = $("assignmentArea").value;
+        assignment.weekday = $("assignmentWeekday").value;
+        assignment.tasks = $("assignmentTasks").value.trim();
+        assignment.updatedAt = new Date().toISOString();
+      }
+      resetAssignmentForm();
+    } else {
+      state.assignments.push({
+        id: uid("as"),
+        staffId: $("assignmentStaff").value,
+        areaId: $("assignmentArea").value,
+        weekday: $("assignmentWeekday").value,
+        tasks: $("assignmentTasks").value.trim()
+      });
+      event.target.reset();
+    }
     saveState();
     renderAll();
   });
+  $("assignmentCancelEditBtn").addEventListener("click", resetAssignmentForm);
 
-  $("importPresetScheduleBtn").addEventListener("click", () => syncPresetSchedule({ showResult: true }));
+  $("importPresetScheduleBtn").addEventListener("click", () => syncPresetSchedule({ showResult: true, force: true, markSynced: true }));
 
   $("inspectionForm").addEventListener("submit", (event) => {
     event.preventDefault();
@@ -371,7 +412,10 @@ function bindAdmin() {
 }
 
 function syncPresetSchedule(options = {}) {
-  const { showResult = false } = options;
+  const { showResult = false, force = false, markSynced = false } = options;
+  if (state.presetScheduleSynced && !force) {
+    return { createdAreas: 0, createdAssignments: 0, skippedAssignments: 0, missingStaff: [], message: "圖片班表已同步過。" };
+  }
   let createdAreas = 0;
   let createdAssignments = 0;
   let skippedAssignments = 0;
@@ -410,7 +454,10 @@ function syncPresetSchedule(options = {}) {
     });
   });
 
-  if (createdAreas > 0 || createdAssignments > 0) {
+  if (markSynced) {
+    state.presetScheduleSynced = true;
+  }
+  if (createdAreas > 0 || createdAssignments > 0 || markSynced) {
     saveState();
   }
   if (showResult) {
@@ -591,6 +638,7 @@ function renderStaffAdmin() {
     `${staff.name} ${staff.active ? "" : "（停用）"}`,
     `${staff.phone || "無手機"} / 時薪 ${money(staff.hourlyRate)}`,
     [
+      button("修改", () => editStaff(staff.id)),
       button(staff.active ? "停用" : "啟用", () => {
         staff.active = !staff.active;
         saveState();
@@ -606,7 +654,10 @@ function renderAreaAdmin() {
   const nodes = state.areas.map((area) => row(
     area.name,
     area.location || "未填位置",
-    [button("刪除", () => removeItem("areas", area.id), "danger")]
+    [
+      button("修改", () => editArea(area.id)),
+      button("刪除", () => removeItem("areas", area.id), "danger")
+    ]
   ));
   clearAndAppend($("areaAdminList"), nodes);
 }
@@ -618,10 +669,76 @@ function renderAssignmentAdmin() {
     return row(
       `${assignment.weekday} / ${staff?.name || "已刪除人員"} / ${area?.name || "已刪除區域"}`,
       assignment.tasks,
-      [button("刪除", () => removeItem("assignments", assignment.id), "danger")]
+      [
+        button("修改", () => editAssignment(assignment.id)),
+        button("刪除", () => removeItem("assignments", assignment.id), "danger")
+      ]
     );
   });
   clearAndAppend($("assignmentAdminList"), nodes);
+}
+
+function editStaff(id) {
+  const staff = byId(state.staff, id);
+  if (!staff) return;
+  editingStaffId = id;
+  $("staffName").value = staff.name;
+  $("staffPhone").value = staff.phone || "";
+  $("staffRate").value = staff.hourlyRate;
+  $("staffFormTitle").textContent = "修改工作人員";
+  $("staffSubmitBtn").textContent = "儲存修改";
+  $("staffCancelEditBtn").classList.remove("hidden");
+  $("staffName").focus();
+}
+
+function resetStaffForm() {
+  editingStaffId = null;
+  $("staffForm").reset();
+  $("staffFormTitle").textContent = "新增工作人員";
+  $("staffSubmitBtn").textContent = "新增";
+  $("staffCancelEditBtn").classList.add("hidden");
+}
+
+function editArea(id) {
+  const area = byId(state.areas, id);
+  if (!area) return;
+  editingAreaId = id;
+  $("areaName").value = area.name;
+  $("areaLocation").value = area.location || "";
+  $("areaFormTitle").textContent = "修改工作區域";
+  $("areaSubmitBtn").textContent = "儲存修改";
+  $("areaCancelEditBtn").classList.remove("hidden");
+  $("areaName").focus();
+}
+
+function resetAreaForm() {
+  editingAreaId = null;
+  $("areaForm").reset();
+  $("areaFormTitle").textContent = "新增工作區域";
+  $("areaSubmitBtn").textContent = "新增";
+  $("areaCancelEditBtn").classList.add("hidden");
+}
+
+function editAssignment(id) {
+  const assignment = byId(state.assignments, id);
+  if (!assignment) return;
+  editingAssignmentId = id;
+  $("assignmentStaff").value = assignment.staffId;
+  $("assignmentArea").value = assignment.areaId;
+  $("assignmentWeekday").value = assignment.weekday;
+  $("assignmentTasks").value = assignment.tasks;
+  $("assignmentFormTitle").textContent = "修改個人工作內容";
+  $("assignmentSubmitBtn").textContent = "儲存修改";
+  $("assignmentCancelEditBtn").classList.remove("hidden");
+  $("assignmentTasks").focus();
+}
+
+function resetAssignmentForm() {
+  editingAssignmentId = null;
+  $("assignmentForm").reset();
+  $("assignmentFormTitle").textContent = "安排打掃內容";
+  $("assignmentSubmitBtn").textContent = "新增";
+  $("assignmentCancelEditBtn").classList.add("hidden");
 }
 
 function renderInspectionAdmin() {
