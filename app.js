@@ -105,7 +105,8 @@ const seedData = {
   timeRecords: [],
   inspections: [],
   settlements: [],
-  activeClocks: {}
+  activeClocks: {},
+  taskCompletions: {}
 };
 
 let state = loadState();
@@ -119,6 +120,7 @@ function loadState() {
   try {
     const parsed = { ...structuredClone(seedData), ...JSON.parse(raw) };
     if (!parsed.activeClocks) parsed.activeClocks = {};
+    if (!parsed.taskCompletions) parsed.taskCompletions = {};
     if (parsed.activeClock?.staffId) {
       parsed.activeClocks[parsed.activeClock.staffId] = parsed.activeClock;
       delete parsed.activeClock;
@@ -240,6 +242,12 @@ function showView(view) {
 function bindStaff() {
   $("clockBtn").addEventListener("click", toggleClock);
   $("weekdayFilter").addEventListener("change", renderStaffAssignments);
+  $("staffAssignments").addEventListener("change", (event) => {
+    if (!event.target.matches("[data-assignment-complete]")) return;
+    state.taskCompletions[event.target.dataset.assignmentComplete] = event.target.checked;
+    saveState();
+    renderStaffAssignments();
+  });
 }
 
 function toggleClock() {
@@ -481,7 +489,6 @@ function renderStaffView() {
   $("staffTitle").textContent = staff.name;
   $("staffStatus").textContent = activeClock ? "上班中" : "未打卡";
   $("unsettledHours").textContent = `${unsettledHours.toFixed(2)} 小時`;
-  $("estimatedPay").textContent = money(unsettledHours * staff.hourlyRate);
   $("clockBtn").textContent = activeClock ? "下班打卡" : "上班打卡";
   $("clockHint").textContent = activeClock ? `上班時間 ${formatDateTime(activeClock.clockIn)}` : "請於開始工作時打卡";
 
@@ -498,17 +505,28 @@ function renderStaffAssignments() {
   const nodes = assignments.map((assignment) => {
     const area = byId(state.areas, assignment.areaId);
     const warning = needsCleaningAttention(staffId, assignment.areaId);
+    const completionKey = getCompletionKey(staffId, assignment.id);
+    const completed = Boolean(state.taskCompletions[completionKey]);
     const item = document.createElement("div");
-    item.className = "work-item";
+    item.className = `work-item ${completed ? "completed" : ""}`;
     item.innerHTML = `
-      <strong>${assignment.weekday} / ${escapeHtml(area?.name || "已刪除區域")}</strong>
-      <span>${escapeHtml(area?.location || "")}</span>
-      <span>${escapeHtml(assignment.tasks)}</span>
-      ${warning ? '<span class="warning-text">請加強清潔</span>' : ""}
+      <label class="task-check">
+        <input type="checkbox" data-assignment-complete="${escapeHtml(completionKey)}" ${completed ? "checked" : ""}>
+        <span>
+          <strong>${assignment.weekday} / ${escapeHtml(area?.name || "已刪除區域")}</strong>
+          <span>${escapeHtml(area?.location || "")}</span>
+          <span>${escapeHtml(assignment.tasks)}</span>
+          ${warning ? '<span class="warning-text">請加強清潔</span>' : ""}
+        </span>
+      </label>
     `;
     return item;
   });
   clearAndAppend($("staffAssignments"), nodes);
+}
+
+function getCompletionKey(staffId, assignmentId) {
+  return `${todayISO()}::${staffId}::${assignmentId}`;
 }
 
 function needsCleaningAttention(staffId, areaId) {

@@ -234,7 +234,7 @@ select:focus {
 .metric-grid,
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
   margin-bottom: 14px;
 }
@@ -288,6 +288,36 @@ select:focus {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
+}
+
+.work-item.completed {
+  background: #f0f6f3;
+}
+
+.work-item.completed strong,
+.work-item.completed .task-check span span:not(.warning-text) {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.task-check {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--ink);
+}
+
+.task-check input {
+  width: 20px;
+  min-height: 20px;
+  margin: 2px 0 0;
+  accent-color: var(--primary);
+}
+
+.task-check > span {
+  display: grid;
+  gap: 7px;
 }
 
 .row {
