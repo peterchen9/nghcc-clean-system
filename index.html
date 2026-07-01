@@ -182,11 +182,12 @@
             <div class="panel">
               <h3>薪資結算</h3>
               <form id="settlementForm" class="grid-form">
+                <select id="settlementStaff"></select>
                 <input id="settleStart" required type="date">
                 <input id="settleEnd" required type="date">
                 <button class="primary" type="submit">依日期結算</button>
               </form>
-              <p class="muted">結算後，所選日期內的工時會標記為已結算，個人未結算工時會歸零或扣除已結算部分。</p>
+              <p class="muted">可選全部或單一人員。結算會依開始日到結束日期間內的計薪時數計算，完成後該區間工時會標記為已結算。</p>
             </div>
             <div id="payrollSummary" class="table-list"></div>
             <div id="settlementList" class="table-list"></div>

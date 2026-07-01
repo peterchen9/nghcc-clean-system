@@ -106,6 +106,7 @@ const seedData = {
   inspections: [],
   settlements: [],
   activeClocks: {},
+  lastClockActions: {},
   taskCompletions: {}
 };
 
@@ -120,6 +121,7 @@ function loadState() {
   try {
     const parsed = { ...structuredClone(seedData), ...JSON.parse(raw) };
     if (!parsed.activeClocks) parsed.activeClocks = {};
+    if (!parsed.lastClockActions) parsed.lastClockActions = {};
     if (!parsed.taskCompletions) parsed.taskCompletions = {};
     if (parsed.activeClock?.staffId) {
       parsed.activeClocks[parsed.activeClock.staffId] = parsed.activeClock;
@@ -154,6 +156,15 @@ function formatDateTime(value) {
 
 function hoursBetween(start, end) {
   return Math.max(0, (new Date(end) - new Date(start)) / 36e5);
+}
+
+function minutesBetween(start, end) {
+  return Math.max(0, Math.round((new Date(end) - new Date(start)) / 60000));
+}
+
+function billableHoursFromMinutes(minutes) {
+  if (minutes <= 20) return minutes / 60;
+  return Math.ceil(minutes / 30) * 0.5;
 }
 
 function money(value) {
@@ -254,20 +265,29 @@ function toggleClock() {
   const staffId = session.staffId;
   if (!staffId) return;
   const now = new Date().toISOString();
+  const lastAction = state.lastClockActions?.[staffId];
+  if (lastAction && minutesBetween(lastAction, now) < 15) {
+    alert("15分鐘內不能重覆打卡，請稍後再試。");
+    return;
+  }
   const activeClock = getActiveClock(staffId);
   if (activeClock) {
+    const actualMinutes = minutesBetween(activeClock.clockIn, now);
+    const billableHours = billableHoursFromMinutes(actualMinutes);
     state.timeRecords.push({
       id: uid("t"),
       staffId,
       clockIn: activeClock.clockIn,
       clockOut: now,
-      hours: hoursBetween(activeClock.clockIn, now),
+      actualMinutes,
+      hours: billableHours,
       settled: false
     });
     delete state.activeClocks[staffId];
   } else {
     state.activeClocks[staffId] = { staffId, clockIn: now };
   }
+  state.lastClockActions[staffId] = now;
   saveState();
   renderAll();
 }
@@ -345,7 +365,7 @@ function bindAdmin() {
 
   $("settlementForm").addEventListener("submit", (event) => {
     event.preventDefault();
-    settlePayroll($("settleStart").value, $("settleEnd").value);
+    settlePayroll($("settleStart").value, $("settleEnd").value, $("settlementStaff").value);
   });
 }
 
@@ -403,12 +423,12 @@ function findOrCreateArea(name) {
   return { ...area, created: true };
 }
 
-function settlePayroll(startDate, endDate) {
+function settlePayroll(startDate, endDate, staffId = "all") {
   const start = new Date(`${startDate}T00:00:00`);
   const end = new Date(`${endDate}T23:59:59`);
   const records = state.timeRecords.filter((record) => {
     const clockIn = new Date(record.clockIn);
-    return !record.settled && clockIn >= start && clockIn <= end;
+    return !record.settled && clockIn >= start && clockIn <= end && (staffId === "all" || record.staffId === staffId);
   });
   if (!records.length) {
     alert("此日期區間沒有未結算工時");
@@ -428,6 +448,7 @@ function settlePayroll(startDate, endDate) {
     id: uid("p"),
     startDate,
     endDate,
+    staffId,
     createdAt: new Date().toISOString(),
     items: Object.values(totals)
   };
@@ -473,6 +494,7 @@ function renderSharedOptions() {
   ["assignmentArea", "inspectionArea"].forEach((id) => ($(id).innerHTML = areaOptions));
   $("assignmentWeekday").innerHTML = weekdayOptions;
   $("weekdayFilter").innerHTML = `<option value="全部">全部星期</option>${weekdayOptions}`;
+  $("settlementStaff").innerHTML = `<option value="all">全部人員</option>${staffOptions}`;
 
   const today = todayISO();
   if (!$("settleStart").value) $("settleStart").value = today;
@@ -539,8 +561,8 @@ function renderStaffRecords(records) {
     const item = document.createElement("div");
     item.className = "record-item";
     item.innerHTML = `
-      <strong>${record.hours.toFixed(2)} 小時</strong>
-      <span class="record-meta">${formatDateTime(record.clockIn)} - ${formatDateTime(record.clockOut)}</span>
+      <strong>${record.hours.toFixed(2)} 計薪小時</strong>
+      <span class="record-meta">${formatDateTime(record.clockIn)} - ${formatDateTime(record.clockOut)} / 實際 ${record.actualMinutes ?? Math.round(record.hours * 60)} 分鐘</span>
     `;
     return item;
   });
@@ -622,7 +644,8 @@ function renderPayrollAdmin() {
         return `${staff?.name || "已刪除人員"}：${item.hours.toFixed(2)} 小時，${money(item.amount)}`;
       })
       .join("；");
-    return row(`${settlement.startDate} 至 ${settlement.endDate}`, detail, []);
+    const target = settlement.staffId && settlement.staffId !== "all" ? byId(state.staff, settlement.staffId)?.name || "指定人員" : "全部人員";
+    return row(`${settlement.startDate} 至 ${settlement.endDate} / ${target}`, detail, []);
   });
   clearAndAppend($("settlementList"), settlements);
 }
