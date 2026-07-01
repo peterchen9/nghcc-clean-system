@@ -196,6 +196,7 @@ function init() {
   bindLogin();
   bindStaff();
   bindAdmin();
+  syncPresetSchedule();
   renderAll();
 }
 
@@ -346,7 +347,7 @@ function bindAdmin() {
     renderAll();
   });
 
-  $("importPresetScheduleBtn").addEventListener("click", importPresetSchedule);
+  $("importPresetScheduleBtn").addEventListener("click", () => syncPresetSchedule({ showResult: true }));
 
   $("inspectionForm").addEventListener("submit", (event) => {
     event.preventDefault();
@@ -369,7 +370,8 @@ function bindAdmin() {
   });
 }
 
-function importPresetSchedule() {
+function syncPresetSchedule(options = {}) {
+  const { showResult = false } = options;
   let createdAreas = 0;
   let createdAssignments = 0;
   let skippedAssignments = 0;
@@ -408,11 +410,18 @@ function importPresetSchedule() {
     });
   });
 
-  saveState();
-  renderAll();
+  if (createdAreas > 0 || createdAssignments > 0) {
+    saveState();
+  }
+  if (showResult) {
+    renderAll();
+  }
   const missingText = missingStaff.length ? `未找到人員：${missingStaff.join("、")}。` : "所有圖片人員都已找到。";
-  $("importScheduleResult").textContent =
-    `已新增 ${createdAreas} 個區域、${createdAssignments} 筆工作內容，略過 ${skippedAssignments} 筆既有內容。${missingText}`;
+  const message = `已新增 ${createdAreas} 個區域、${createdAssignments} 筆工作內容，略過 ${skippedAssignments} 筆既有內容。${missingText}`;
+  if (showResult) {
+    $("importScheduleResult").textContent = message;
+  }
+  return { createdAreas, createdAssignments, skippedAssignments, missingStaff, message };
 }
 
 function findOrCreateArea(name) {
