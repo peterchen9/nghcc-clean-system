@@ -200,6 +200,10 @@ function byId(collection, id) {
   return collection.find((item) => item.id === id);
 }
 
+function isStaffActive(staff) {
+  return staff.active !== false;
+}
+
 function emptyState() {
   return $("emptyStateTemplate").content.firstElementChild.cloneNode(true);
 }
@@ -641,12 +645,12 @@ function renderAll() {
 }
 
 function renderLogin() {
-  const activeStaff = state.staff.filter((staff) => staff.active);
+  const activeStaff = state.staff.filter(isStaffActive);
   $("loginStaff").innerHTML = activeStaff
     .map((staff) => `<option value="${staff.id}">${escapeHtml(staff.name)}</option>`)
     .join("");
   $("loginSummary").innerHTML = `
-    <div class="metric"><span>工作人員</span><strong>${state.staff.filter((staff) => staff.active).length}</strong></div>
+    <div class="metric"><span>工作人員</span><strong>${state.staff.filter(isStaffActive).length}</strong></div>
     <div class="metric"><span>工作區域</span><strong>${state.areas.length}</strong></div>
     <div class="metric"><span>本週內容</span><strong>${state.assignments.length}</strong></div>
     <div class="metric"><span>未結算筆數</span><strong>${state.timeRecords.filter((record) => !record.settled).length}</strong></div>
@@ -655,7 +659,7 @@ function renderLogin() {
 
 function renderSharedOptions() {
   const staffOptions = state.staff
-    .filter((staff) => staff.active)
+    .filter(isStaffActive)
     .map((staff) => `<option value="${staff.id}">${escapeHtml(staff.name)}</option>`)
     .join("");
   const areaOptions = state.areas
@@ -756,12 +760,12 @@ function renderAdminView() {
 
 function renderStaffAdmin() {
   const nodes = state.staff.map((staff) => row(
-    `${staff.name} ${staff.active ? "" : "（停用）"}`,
+    `${staff.name} ${isStaffActive(staff) ? "" : "（停用）"}`,
     `${staff.phone || "無手機"} / 時薪 ${money(staff.hourlyRate)}`,
     [
       button("修改", () => editStaff(staff.id)),
-      button(staff.active ? "停用" : "啟用", () => {
-        staff.active = !staff.active;
+      button(isStaffActive(staff) ? "停用" : "啟用", () => {
+        staff.active = !isStaffActive(staff);
         saveState();
         renderAll();
       }),
