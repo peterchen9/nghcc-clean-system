@@ -191,9 +191,27 @@
             <div id="inspectionList" class="table-list"></div>
           </div>
 
+          <div id="payrollAuthTab" class="admin-tab hidden">
+            <div class="panel login-panel">
+              <p class="eyebrow">Payroll</p>
+              <h3>薪資功能驗證</h3>
+              <form id="payrollAuthForm" class="form-stack">
+                <label>
+                  <span>薪資密碼</span>
+                  <input id="payrollPassword" type="password" autocomplete="current-password">
+                </label>
+                <button class="primary" type="submit">進入薪資功能</button>
+                <button id="payrollAuthCancelBtn" class="ghost" type="button">回到一般後台</button>
+              </form>
+            </div>
+          </div>
+
           <div id="payrollTab" class="admin-tab hidden">
             <div class="panel">
-              <h3>薪資結算</h3>
+              <div class="panel-head">
+                <h3>薪資結算</h3>
+                <button id="payrollExitBtn" class="ghost" type="button">退出薪資功能</button>
+              </div>
               <form id="settlementForm" class="grid-form">
                 <select id="settlementStaff"></select>
                 <input id="settleStart" required type="date">

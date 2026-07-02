@@ -1,5 +1,6 @@
 const STORAGE_KEY = "cleaning-work-system-v1";
 const ADMIN_PASSWORD = "admin123";
+const PAYROLL_PASSWORD = "nldwehdw";
 const weekdays = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"];
 const presetSchedule = [
   {
@@ -118,6 +119,7 @@ let editingStaffId = null;
 let editingAreaId = null;
 let editingAssignmentId = null;
 let editingTimeRecordId = null;
+let payrollUnlocked = false;
 
 const $ = (id) => document.getElementById(id);
 
@@ -308,6 +310,7 @@ function bindLogin() {
   });
   $("logoutBtn").addEventListener("click", () => {
     session = { role: null, staffId: null };
+    payrollUnlocked = false;
     $("adminPassword").value = "";
     showView("login");
     renderAll();
@@ -370,15 +373,42 @@ function getActiveClock(staffId) {
   return state.activeClocks?.[staffId] || null;
 }
 
+function openAdminTab(tabId) {
+  const targetTab = tabId === "payrollTab" && !payrollUnlocked ? "payrollAuthTab" : tabId;
+  if (tabId !== "payrollTab") payrollUnlocked = false;
+  document.querySelectorAll(".tabs button").forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.tab === tabId);
+  });
+  document.querySelectorAll(".admin-tab").forEach((tab) => tab.classList.add("hidden"));
+  $(targetTab).classList.remove("hidden");
+  if (targetTab === "payrollAuthTab") $("payrollPassword").focus();
+}
+
+function exitPayroll() {
+  payrollUnlocked = false;
+  $("payrollPassword").value = "";
+  openAdminTab("staffTab");
+}
+
 function bindAdmin() {
   document.querySelectorAll(".tabs button").forEach((button) => {
     button.addEventListener("click", () => {
-      document.querySelectorAll(".tabs button").forEach((tab) => tab.classList.remove("active"));
-      document.querySelectorAll(".admin-tab").forEach((tab) => tab.classList.add("hidden"));
-      button.classList.add("active");
-      $(button.dataset.tab).classList.remove("hidden");
+      openAdminTab(button.dataset.tab);
     });
   });
+
+  $("payrollAuthForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    if ($("payrollPassword").value !== PAYROLL_PASSWORD) {
+      alert("薪資密碼錯誤");
+      return;
+    }
+    payrollUnlocked = true;
+    $("payrollPassword").value = "";
+    openAdminTab("payrollTab");
+  });
+  $("payrollAuthCancelBtn").addEventListener("click", exitPayroll);
+  $("payrollExitBtn").addEventListener("click", exitPayroll);
 
   $("staffForm").addEventListener("submit", (event) => {
     event.preventDefault();
