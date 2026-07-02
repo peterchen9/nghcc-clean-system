@@ -111,7 +111,8 @@ const seedData = {
   presetScheduleSynced: false
 };
 
-let state = loadState();
+let state = structuredClone(seedData);
+let localStateAtStartup = loadLocalState();
 let session = { role: null, staffId: null };
 let editingStaffId = null;
 let editingAreaId = null;
@@ -120,27 +121,71 @@ let editingTimeRecordId = null;
 
 const $ = (id) => document.getElementById(id);
 
-function loadState() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return structuredClone(seedData);
-  try {
-    const parsed = { ...structuredClone(seedData), ...JSON.parse(raw) };
-    if (!parsed.activeClocks) parsed.activeClocks = {};
-    if (!parsed.lastClockActions) parsed.lastClockActions = {};
-    if (!parsed.taskCompletions) parsed.taskCompletions = {};
-    if (typeof parsed.presetScheduleSynced !== "boolean") parsed.presetScheduleSynced = false;
-    if (parsed.activeClock?.staffId) {
-      parsed.activeClocks[parsed.activeClock.staffId] = parsed.activeClock;
-      delete parsed.activeClock;
-    }
-    return parsed;
-  } catch {
-    return structuredClone(seedData);
+function normalizeState(data) {
+  const parsed = { ...structuredClone(seedData), ...(data || {}) };
+  if (!parsed.activeClocks) parsed.activeClocks = {};
+  if (!parsed.lastClockActions) parsed.lastClockActions = {};
+  if (!parsed.taskCompletions) parsed.taskCompletions = {};
+  if (typeof parsed.presetScheduleSynced !== "boolean") parsed.presetScheduleSynced = false;
+  if (parsed.activeClock?.staffId) {
+    parsed.activeClocks[parsed.activeClock.staffId] = parsed.activeClock;
+    delete parsed.activeClock;
   }
+  return parsed;
+}
+
+function loadLocalState() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    return normalizeState(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+async function loadState() {
+  try {
+    const response = await fetch("/api/state", { cache: "no-store" });
+    if (response.ok) {
+      const data = await response.json();
+      if (data.state) return normalizeState(data.state);
+    }
+  } catch {
+    // Offline or static fallback.
+  }
+  return localStateAtStartup || structuredClone(seedData);
 }
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  persistServerState(state);
+}
+
+async function persistServerState(data) {
+  try {
+    await fetch("/api/state", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+    $("syncStatus").textContent = "已同步到伺服器";
+  } catch {
+    $("syncStatus").textContent = "目前只儲存在本機，伺服器同步失敗";
+  }
+}
+
+async function publishLocalDataToServer() {
+  if (!localStateAtStartup) {
+    alert("這支裝置沒有可上傳的本機資料。");
+    return;
+  }
+  if (!confirm("確定要用這支裝置目前的本機資料覆蓋伺服器共用資料？其他人重新開啟後會看到這份資料。")) return;
+  state = normalizeState(localStateAtStartup);
+  syncPresetSchedule({ markSynced: true });
+  await persistServerState(state);
+  renderAll();
+  $("syncStatus").textContent = "已將這支裝置的本機資料同步到伺服器";
 }
 
 function uid(prefix) {
@@ -217,7 +262,8 @@ function clearAndAppend(container, nodes) {
   nodes.forEach((node) => container.appendChild(node));
 }
 
-function init() {
+async function init() {
+  state = await loadState();
   bindLogin();
   bindStaff();
   bindAdmin();
@@ -438,6 +484,7 @@ function bindAdmin() {
     saveTimeRecordFromForm();
   });
   $("timeRecordCancelEditBtn").addEventListener("click", resetTimeRecordForm);
+  $("publishLocalDataBtn").addEventListener("click", publishLocalDataToServer);
 }
 
 function syncPresetSchedule(options = {}) {

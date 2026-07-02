@@ -6,4 +6,6 @@ services:
     container_name: nghcc-clean-system
     ports:
       - "8081:80"
+    volumes:
+      - ./data:/app/data
     restart: unless-stopped

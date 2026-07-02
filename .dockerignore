@@ -1,4 +1,5 @@
 .git
 .agents
 node_modules
+data
 *.log

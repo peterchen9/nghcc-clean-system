@@ -111,6 +111,16 @@
 
           <div id="staffTab" class="admin-tab">
             <div class="panel">
+              <div class="panel-head">
+                <div>
+                  <h3>共用資料同步</h3>
+                  <p class="muted">若這支手機資料是最新正確版本，可上傳到伺服器，其他人重新開啟後會看到同一份資料。</p>
+                </div>
+                <button id="publishLocalDataBtn" class="primary" type="button">將本機資料同步到伺服器</button>
+              </div>
+              <div id="syncStatus" class="muted"></div>
+            </div>
+            <div class="panel">
               <h3 id="staffFormTitle">新增工作人員</h3>
               <form id="staffForm" class="grid-form">
                 <input id="staffName" required placeholder="姓名">
