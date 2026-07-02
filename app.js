@@ -479,6 +479,7 @@ function bindAdmin() {
     event.preventDefault();
     renderPayrollAdmin();
   });
+  $("printTimeDetailBtn").addEventListener("click", printTimeDetails);
   $("timeRecordForm").addEventListener("submit", (event) => {
     event.preventDefault();
     saveTimeRecordFromForm();
@@ -560,13 +561,14 @@ function settlePayroll(startDate, endDate, staffId = "all") {
   const end = new Date(`${endDate}T23:59:59`);
   const records = state.timeRecords.filter((record) => {
     const clockIn = new Date(record.clockIn);
-    return !record.settled && clockIn >= start && clockIn <= end && (staffId === "all" || record.staffId === staffId);
+    return clockIn >= start && clockIn <= end && (staffId === "all" || record.staffId === staffId);
   });
   if (!records.length) {
-    alert("此日期區間沒有未結算工時");
+    alert("此日期區間沒有工時紀錄");
     return;
   }
   const totals = {};
+  const previousSettlementIds = new Set(records.map((record) => record.settlementId).filter(Boolean));
   records.forEach((record) => {
     const staff = byId(state.staff, record.staffId);
     if (!staff) return;
@@ -582,11 +584,14 @@ function settlePayroll(startDate, endDate, staffId = "all") {
     endDate,
     staffId,
     createdAt: new Date().toISOString(),
+    recalculated: previousSettlementIds.size > 0,
+    replaces: Array.from(previousSettlementIds),
     items: Object.values(totals)
   };
   state.timeRecords.forEach((record) => {
     if (records.includes(record)) record.settlementId = settlement.id;
   });
+  previousSettlementIds.forEach(rebuildSettlementTotals);
   state.settlements.unshift(settlement);
   saveState();
   renderAll();
@@ -725,7 +730,8 @@ function renderSharedOptions() {
   const today = todayISO();
   if (!$("settleStart").value) $("settleStart").value = today;
   if (!$("settleEnd").value) $("settleEnd").value = today;
-  if (!$("timeFilterDate").value) $("timeFilterDate").value = today;
+  if (!$("timeFilterStart").value) $("timeFilterStart").value = today;
+  if (!$("timeFilterEnd").value) $("timeFilterEnd").value = today;
   if (!$("timeRecordDate").value) $("timeRecordDate").value = today;
 }
 
@@ -944,32 +950,148 @@ function renderPayrollAdmin() {
       })
       .join("；");
     const target = settlement.staffId && settlement.staffId !== "all" ? byId(state.staff, settlement.staffId)?.name || "指定人員" : "全部人員";
-    return row(`${settlement.startDate} 至 ${settlement.endDate} / ${target}`, detail, []);
+    const label = settlement.recalculated ? "重新結算" : "結算";
+    return row(`${settlement.startDate} 至 ${settlement.endDate} / ${target} / ${label}`, detail, []);
   });
   clearAndAppend($("settlementList"), settlements);
 }
 
 function renderTimeRecordAdmin() {
-  const filterStaff = $("timeFilterStaff").value || "all";
-  const filterDate = $("timeFilterDate").value;
-  const records = state.timeRecords
-    .filter((record) => filterStaff === "all" || record.staffId === filterStaff)
-    .filter((record) => !filterDate || localDateISO(record.clockIn) === filterDate)
-    .sort((a, b) => new Date(b.clockIn) - new Date(a.clockIn));
+  const records = getFilteredTimeRecords();
+  const grouped = groupTimeRecordsByDate(records);
+  const nodes = [];
 
-  const nodes = records.map((record) => {
-    const staff = byId(state.staff, record.staffId);
-    const status = record.settled ? "已結算" : "未結算";
-    const date = localDateISO(record.clockIn);
-    const timeRange = `${localTimeHHMM(record.clockIn)}-${localTimeHHMM(record.clockOut)}`;
-    const actualMinutes = record.actualMinutes ?? Math.round((record.hours || 0) * 60);
-    return row(
-      `${date} / ${staff?.name || "已刪除人員"} / ${status}`,
-      `${timeRange} / 實際 ${actualMinutes} 分鐘 / 計薪 ${Number(record.hours || 0).toFixed(2)} 小時`,
-      [button("修改", () => editTimeRecord(record.id))]
-    );
+  grouped.forEach((group) => {
+    nodes.push(row(
+      `${group.date} 每日合計`,
+      `實際 ${group.actualMinutes} 分鐘 / 計薪 ${group.hours.toFixed(2)} 小時 / ${money(group.amount)}`,
+      []
+    ));
+    group.records.forEach((record) => {
+      const staff = byId(state.staff, record.staffId);
+      const status = record.settled ? "已結算" : "未結算";
+      const timeRange = `${localTimeHHMM(record.clockIn)}-${localTimeHHMM(record.clockOut)}`;
+      const actualMinutes = record.actualMinutes ?? Math.round((record.hours || 0) * 60);
+      const amount = Number(record.hours || 0) * Number(staff?.hourlyRate || 0);
+      nodes.push(row(
+        `${group.date} / ${staff?.name || "已刪除人員"} / ${status}`,
+        `${timeRange} / 實際 ${actualMinutes} 分鐘 / 計薪 ${Number(record.hours || 0).toFixed(2)} 小時 / ${money(amount)}`,
+        [button("修改", () => editTimeRecord(record.id))]
+      ));
+    });
   });
   clearAndAppend($("timeRecordList"), nodes);
+}
+
+function getFilteredTimeRecords() {
+  const filterStaff = $("timeFilterStaff").value || "all";
+  const startDate = $("timeFilterStart").value;
+  const endDate = $("timeFilterEnd").value;
+  const start = startDate ? new Date(`${startDate}T00:00:00`) : null;
+  const end = endDate ? new Date(`${endDate}T23:59:59`) : null;
+  return state.timeRecords
+    .filter((record) => filterStaff === "all" || record.staffId === filterStaff)
+    .filter((record) => {
+      const clockIn = new Date(record.clockIn);
+      return (!start || clockIn >= start) && (!end || clockIn <= end);
+    })
+    .sort((a, b) => new Date(a.clockIn) - new Date(b.clockIn));
+}
+
+function groupTimeRecordsByDate(records) {
+  const groups = new Map();
+  records.forEach((record) => {
+    const date = localDateISO(record.clockIn);
+    const staff = byId(state.staff, record.staffId);
+    if (!groups.has(date)) {
+      groups.set(date, { date, records: [], actualMinutes: 0, hours: 0, amount: 0 });
+    }
+    const group = groups.get(date);
+    const actualMinutes = record.actualMinutes ?? Math.round((record.hours || 0) * 60);
+    const hours = Number(record.hours || 0);
+    group.records.push(record);
+    group.actualMinutes += actualMinutes;
+    group.hours += hours;
+    group.amount += hours * Number(staff?.hourlyRate || 0);
+  });
+  return Array.from(groups.values()).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function printTimeDetails() {
+  const records = getFilteredTimeRecords();
+  if (!records.length) {
+    alert("目前篩選條件沒有工時明細可列印");
+    return;
+  }
+  const staffLabel = $("timeFilterStaff").value === "all"
+    ? "全部人員"
+    : byId(state.staff, $("timeFilterStaff").value)?.name || "指定人員";
+  const startDate = $("timeFilterStart").value || "最早";
+  const endDate = $("timeFilterEnd").value || "最新";
+  const grouped = groupTimeRecordsByDate(records);
+  const totalHours = grouped.reduce((sum, group) => sum + group.hours, 0);
+  const totalAmount = grouped.reduce((sum, group) => sum + group.amount, 0);
+  const rows = grouped.flatMap((group) => {
+    const detailRows = group.records.map((record) => {
+      const staff = byId(state.staff, record.staffId);
+      const actualMinutes = record.actualMinutes ?? Math.round((record.hours || 0) * 60);
+      const hours = Number(record.hours || 0);
+      const amount = hours * Number(staff?.hourlyRate || 0);
+      return `
+        <tr>
+          <td>${escapeHtml(group.date)}</td>
+          <td>${escapeHtml(staff?.name || "已刪除人員")}</td>
+          <td>${escapeHtml(`${localTimeHHMM(record.clockIn)}-${localTimeHHMM(record.clockOut)}`)}</td>
+          <td>${actualMinutes}</td>
+          <td>${hours.toFixed(2)}</td>
+          <td>${escapeHtml(record.settled ? "已結算" : "未結算")}</td>
+          <td>${escapeHtml(money(amount))}</td>
+        </tr>
+      `;
+    });
+    return [
+      `<tr class="day-total"><td colspan="3">${escapeHtml(group.date)} 每日合計</td><td>${group.actualMinutes}</td><td>${group.hours.toFixed(2)}</td><td></td><td>${escapeHtml(money(group.amount))}</td></tr>`,
+      ...detailRows
+    ];
+  }).join("");
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    alert("瀏覽器阻擋了列印視窗，請允許彈出視窗後再試一次");
+    return;
+  }
+  printWindow.document.write(`
+    <!doctype html>
+    <html lang="zh-Hant">
+      <head>
+        <meta charset="utf-8">
+        <title>工時明細表</title>
+        <style>
+          body { font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif; color: #111; margin: 24px; }
+          h1 { font-size: 22px; margin: 0 0 8px; }
+          p { margin: 0 0 14px; }
+          table { width: 100%; border-collapse: collapse; font-size: 13px; }
+          th, td { border: 1px solid #333; padding: 7px; text-align: left; }
+          th { background: #e8eee9; }
+          .day-total, tfoot { font-weight: 700; background: #f4f7f5; }
+          @media print { button { display: none; } body { margin: 12mm; } }
+        </style>
+      </head>
+      <body>
+        <button onclick="window.print()">列印</button>
+        <h1>工時明細表</h1>
+        <p>${escapeHtml(staffLabel)} / ${escapeHtml(startDate)} 至 ${escapeHtml(endDate)} / 列印時間 ${escapeHtml(new Date().toLocaleString("zh-TW"))}</p>
+        <table>
+          <thead>
+            <tr><th>日期</th><th>人員</th><th>時段</th><th>實際分鐘</th><th>計薪小時</th><th>狀態</th><th>金額</th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
+          <tfoot><tr><td colspan="4">總計</td><td>${totalHours.toFixed(2)}</td><td></td><td>${escapeHtml(money(totalAmount))}</td></tr></tfoot>
+        </table>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
 }
 
 function row(title, subtitle, actions) {
