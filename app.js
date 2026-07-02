@@ -232,7 +232,9 @@ function minutesBetween(start, end) {
 
 function billableHoursFromMinutes(minutes) {
   if (minutes <= 20) return minutes / 60;
-  return Math.ceil(minutes / 30) * 0.5;
+  const halfHourBlocks = Math.floor(minutes / 30);
+  const remainder = minutes % 30;
+  return (halfHourBlocks + (remainder > 20 ? 1 : 0)) * 0.5;
 }
 
 function money(value) {
@@ -264,13 +266,32 @@ function clearAndAppend(container, nodes) {
   nodes.forEach((node) => container.appendChild(node));
 }
 
+function repairBillableTimeRecords() {
+  const settlementIds = new Set();
+  let changed = false;
+  state.timeRecords.forEach((record) => {
+    if (record.manual || typeof record.actualMinutes !== "number") return;
+    const repairedHours = billableHoursFromMinutes(record.actualMinutes);
+    if (Math.abs(Number(record.hours || 0) - repairedHours) < 0.001) return;
+    record.hours = repairedHours;
+    record.updatedAt = new Date().toISOString();
+    changed = true;
+    if (record.settlementId) settlementIds.add(record.settlementId);
+  });
+  settlementIds.forEach(rebuildSettlementTotals);
+  return changed;
+}
+
 async function init() {
   state = await loadState();
+  const repairedTimeRecords = repairBillableTimeRecords();
   bindLogin();
   bindStaff();
   bindAdmin();
   if (!state.presetScheduleSynced) {
     syncPresetSchedule({ markSynced: true });
+  } else if (repairedTimeRecords) {
+    saveState();
   }
   renderAll();
 }
@@ -655,6 +676,7 @@ function saveTimeRecordFromForm() {
       record.clockOut = clockOut.toISOString();
       record.actualMinutes = actualMinutes;
       record.hours = hours;
+      record.manual = manualHours !== "";
       record.updatedAt = new Date().toISOString();
       if (previousSettlementId) rebuildSettlementTotals(previousSettlementId);
     }
