@@ -992,11 +992,6 @@ function renderTimeRecordAdmin() {
   const nodes = [];
 
   grouped.forEach((group) => {
-    nodes.push(row(
-      `${group.date} 每日合計`,
-      `實際 ${group.actualMinutes} 分鐘 / 計薪 ${group.hours.toFixed(2)} 小時 / ${money(group.amount)}`,
-      []
-    ));
     group.records.forEach((record) => {
       const staff = byId(state.staff, record.staffId);
       const status = record.settled ? "已結算" : "未結算";
@@ -1079,10 +1074,7 @@ function printTimeDetails() {
         </tr>
       `;
     });
-    return [
-      `<tr class="day-total"><td colspan="3">${escapeHtml(group.date)} 每日合計</td><td>${group.actualMinutes}</td><td>${group.hours.toFixed(2)}</td><td></td><td>${escapeHtml(money(group.amount))}</td></tr>`,
-      ...detailRows
-    ];
+    return detailRows;
   }).join("");
   const printWindow = window.open("", "_blank");
   if (!printWindow) {
@@ -1102,7 +1094,7 @@ function printTimeDetails() {
           table { width: 100%; border-collapse: collapse; font-size: 13px; }
           th, td { border: 1px solid #333; padding: 7px; text-align: left; }
           th { background: #e8eee9; }
-          .day-total, tfoot { font-weight: 700; background: #f4f7f5; }
+          tfoot { font-weight: 700; background: #f4f7f5; }
           @media print { button { display: none; } body { margin: 12mm; } }
         </style>
       </head>
